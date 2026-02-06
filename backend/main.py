@@ -71,6 +71,8 @@ def load_resources():
         print("Warning: Image vectors not found")
         
     print("Resources loaded!")
+    import gc
+    gc.collect()
 
 def get_base64_image(image_path):
     try:

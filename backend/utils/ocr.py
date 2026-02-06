@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+# from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -13,11 +13,9 @@ load_dotenv(dotenv_path=dotenv_path)
 
 class OCRManager:
     def __init__(self):
-        # 1. Load TrOCR Model
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        model_id = "microsoft/trocr-small-handwritten"
-        self.processor = TrOCRProcessor.from_pretrained(model_id)
-        self.model = VisionEncoderDecoderModel.from_pretrained(model_id).to(self.device)
+        self.processor = None
+        self.model = None
         
         # 2. Initialize LLM Client (Replace with your credentials)
         # os.getenv pulls the values from your .env file
@@ -77,7 +75,15 @@ class OCRManager:
             # Step A: Preprocess
             processed_pil = self.preprocess_image(pil_image)
             
-            # Step B: TrOCR Inference
+            # Step B: TrOCR Inference (Lazy Load)
+            if self.model is None:
+                print("Loading TrOCR model safely...")
+                # Late import to save memory if not used
+                from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+                model_id = "microsoft/trocr-small-handwritten"
+                self.processor = TrOCRProcessor.from_pretrained(model_id)
+                self.model = VisionEncoderDecoderModel.from_pretrained(model_id).to(self.device)
+
             pixel_values = self.processor(processed_pil, return_tensors="pt").pixel_values.to(self.device)
             with torch.no_grad():
                 generated_ids = self.model.generate(pixel_values)
