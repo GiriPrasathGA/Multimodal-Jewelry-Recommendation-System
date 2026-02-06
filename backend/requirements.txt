@@ -2,7 +2,6 @@ torch
 torchvision
 git+https://github.com/openai/CLIP.git
 faiss-cpu
-streamlit
 pandas
 pillow
 scikit-learn
