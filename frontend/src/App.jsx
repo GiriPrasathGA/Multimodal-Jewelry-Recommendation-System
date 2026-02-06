@@ -9,6 +9,9 @@ import { Search, Upload, Loader2, Sparkles, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
+// Define API Base URL (Vercel support)
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 function App() {
     const [activeTab, setActiveTab] = useState('home');
     const [textQuery, setTextQuery] = useState('');
@@ -25,7 +28,7 @@ function App() {
         const fetchTags = async () => {
             try {
                 // Add timestamp to prevent caching and force fresh random tags
-                const res = await axios.get(`http://localhost:8000/tags?t=${Date.now()}`);
+                const res = await axios.get(`${API_BASE_URL}/tags?t=${Date.now()}`);
                 if (res.data.tags && res.data.tags.length > 0) {
                     setQuickTags(res.data.tags);
                 } else {
@@ -45,7 +48,7 @@ function App() {
         setLoading(true);
         setResults([]); // Clear previous to show skeletons
         try {
-            const res = await axios.post('http://localhost:8000/search/text', { query: textQuery, top_k: 12 });
+            const res = await axios.post(`${API_BASE_URL}/search/text`, { query: textQuery, top_k: 12 });
             setResults(res.data);
             if (res.data.length > 0) setToast({ type: 'success', message: `Found ${res.data.length} exquisite items matching your vision.` });
             else setToast({ type: 'info', message: "No exact matches found. Try a different description." });
@@ -77,7 +80,7 @@ function App() {
         formData.append('file', file);
         formData.append('top_k', 12);
         try {
-            const res = await axios.post(`http://localhost:8000/search/${endpoint}`, formData);
+            const res = await axios.post(`${API_BASE_URL}/search/${endpoint}`, formData);
             setResults(res.data);
             setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
         } catch (err) { console.error("Upload failed", err); }
