@@ -45,6 +45,7 @@ def load_resources():
     print("Loading resources...")
     engine = CLIPEngine()
     ocr = OCRManager()
+    ocr.load_model() # Optimization: Eager load at startup
     
     # Load FAISS indices
     if os.path.exists("embeddings/faiss_index.bin"):

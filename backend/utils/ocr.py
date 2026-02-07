@@ -70,19 +70,32 @@ class OCRManager:
             print(f"LLM Error: {e}")
             return raw_text # Fallback to raw text if API fails
 
+    def load_model(self):
+        """Loads the TrOCR model into memory."""
+        if self.model is None:
+            print("Loading TrOCR model safely...")
+            try:
+                from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+                model_id = "microsoft/trocr-small-handwritten"
+                self.processor = TrOCRProcessor.from_pretrained(model_id)
+                # optimization: low_cpu_mem_usage=True speeds up loading if accelerate is installed
+                self.model = VisionEncoderDecoderModel.from_pretrained(model_id).to(self.device)
+                print("TrOCR model loaded successfully!")
+            except Exception as e:
+                print(f"Failed to load TrOCR model: {e}")
+
     def extract_text(self, pil_image, use_llm=True):
         try:
             # Step A: Preprocess
             processed_pil = self.preprocess_image(pil_image)
             
-            # Step B: TrOCR Inference (Lazy Load)
+            # Step B: TrOCR Inference (Lazy Load Fallback)
             if self.model is None:
-                print("Loading TrOCR model safely...")
-                # Late import to save memory if not used
-                from transformers import TrOCRProcessor, VisionEncoderDecoderModel
-                model_id = "microsoft/trocr-small-handwritten"
-                self.processor = TrOCRProcessor.from_pretrained(model_id)
-                self.model = VisionEncoderDecoderModel.from_pretrained(model_id).to(self.device)
+                self.load_model()
+
+            if self.model is None:
+                return "", "" # Failed to load
+
 
             pixel_values = self.processor(processed_pil, return_tensors="pt").pixel_values.to(self.device)
             with torch.no_grad():
