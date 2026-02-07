@@ -23,7 +23,7 @@ class HybridSearcher:
                 if category_filter and str(item.get('category', '')).lower() != category_filter.lower():
                     continue
                 results.append({"metadata": item, "score": float(visual_scores[i])})
-            return results[:top_k]
+            return results[:min(len(results), top_k)]
 
         query_tokens = query_text.lower().split()
         bm25_scores = self.bm25.get_scores(query_tokens)
@@ -49,31 +49,19 @@ class HybridSearcher:
                     continue # Strict filtering: Skip items that don't match
 
             # --- ADVANCED FILTERS ---
-            # filters = {"materials": ["Gold"], "gender": ["Women"], "gemstones": ["Diamond"]}
             if filters:
                 skip_item = False
                 for key, required_values in filters.items():
                     if not required_values: continue
-                    
-                    # Get item attribute (e.g. "Gold,Silver")
-                    # Note: enrich_metadata.py lowercased valid keywords? No, it used capitalized keys but lowercased found?
-                    # Let's check enrich_metadata.py: "Gold" -> "Gold" (capitalized).
-                    # But the search might send "Gold". 
-                    # Let's be case-insensitive to be safe.
                     item_val = str(item.get(key, '')).lower()
-                    
-                    # Check if ANY of the required values are present
-                    # e.g. required=["Gold"], item="silver,gold" -> Match
                     match_found = False
                     for val in required_values:
                         if str(val).lower() in item_val:
                             match_found = True
                             break
-                    
                     if not match_found:
                         skip_item = True
                         break
-                
                 if skip_item:
                     continue
                 
@@ -93,12 +81,13 @@ class HybridSearcher:
         
         # 2. Reranking Phase
         if self.reranker and query_text.strip():
-            # Slice top candidates for reranking
-            candidates_to_rerank = final_ranked_results[:search_k]
+            # Slice top candidates for reranking - use safer slicing
+            pool_size = min(len(final_ranked_results), search_k)
+            candidates_to_rerank = final_ranked_results[:pool_size]
             
             if candidates_to_rerank:
                 # Reranker returns sorted list
                 reranked_results = self.reranker.rerank(query_text, candidates_to_rerank, top_k=top_k)
                 return reranked_results
             
-        return final_ranked_results[:top_k] 
+        return final_ranked_results[:min(len(final_ranked_results), top_k)] 

@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo } from 'react';
 import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion';
 import { ArrowUpRight, Sparkles } from 'lucide-react';
 
-const ProductCard = ({ item, onClick, onSimilar }) => {
+const ProductCard = ({ item, onClick, onSimilar, showAccuracy = true }) => {
     const ref = useRef(null);
     const [hover, setHover] = useState(false);
 
@@ -122,9 +122,11 @@ const ProductCard = ({ item, onClick, onSimilar }) => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-80 transition-opacity duration-300 group-hover:opacity-95 z-10" />
 
                 {/* Match Badge */}
-                <div className={`absolute top-4 right-4 backdrop-blur-md px-3 py-1 rounded-full border text-xs font-bold tracking-wider shadow-lg z-30 transform translate-z-20 ${getBadgeStyle(item.score)}`}>
-                    {Math.round(item.score * 100)}% ACCURACY
-                </div>
+                {showAccuracy && (
+                    <div className={`absolute top-4 right-4 backdrop-blur-md px-3 py-1 rounded-full border text-xs font-bold tracking-wider shadow-lg z-30 transform translate-z-20 ${getBadgeStyle(item.score)}`}>
+                        {Math.round(item.score * 100)}% ACCURACY
+                    </div>
+                )}
 
                 {/* Content Slide-up */}
                 <div

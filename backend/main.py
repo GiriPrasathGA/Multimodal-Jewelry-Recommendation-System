@@ -93,7 +93,6 @@ def get_base64_image(image_path):
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 12
-    # filters removed
 
 class SearchResponseItem(BaseModel):
     id: int
@@ -246,6 +245,32 @@ async def search_by_handwriting(file: UploadFile = File(...), top_k: int = Form(
         "raw_text": raw_ocr,
         "refined_text": cleaned_query if use_llm else "" 
     }
+
+@app.get("/search/featured", response_model=List[SearchResponseItem])
+def get_featured_items(count: int = -1):
+    if not hybrid_searcher:
+        raise HTTPException(status_code=503, detail="Resources not initialized")
+    
+    # Return all items if count is -1, else sample
+    if metadata is not None and not metadata.empty:
+        import random
+        num_items = len(metadata)
+        
+        if count == -1 or count >= num_items:
+            indices = list(range(num_items))
+        else:
+            indices = random.sample(range(num_items), count)
+        
+        featured = []
+        for idx in indices:
+            item = metadata.iloc[idx].to_dict()
+            featured.append({
+                'id': idx,
+                'score': 1.0, 
+                'metadata': item
+            })
+        return format_results(featured)
+    return []
 
 @app.get("/tags")
 def get_tags():

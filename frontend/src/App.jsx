@@ -26,8 +26,9 @@ function App() {
     const [quickTags, setQuickTags] = useState([]);
     const [topK, setTopK] = useState(12); // User preference for result count
     const [currentFile, setCurrentFile] = useState(null);
-    // filters state removed
+    const [homeResults, setHomeResults] = useState([]); // Featured items for home page
     const fileInputRef = useRef(null);
+    const searchId = useRef(0); // For handling race conditions in search results
 
     React.useEffect(() => {
         const fetchTags = async () => {
@@ -44,7 +45,18 @@ function App() {
                 setQuickTags(['Gold', 'Diamond', 'Antique', 'Necklace', 'Engagement']);
             }
         };
+
+        const fetchHomeResults = async () => {
+            try {
+                const res = await axios.get(`${API_BASE_URL}/search/featured?count=-1`);
+                setHomeResults(res.data);
+            } catch (err) {
+                console.error("Failed to fetch featured items", err);
+            }
+        };
+
         fetchTags();
+        fetchHomeResults();
     }, []);
 
     // Effect: Re-run search when topK changes
@@ -68,16 +80,26 @@ function App() {
     const performTextSearch = async (query, k) => {
         if (!query.trim()) return;
         setLoading(true);
-        // setResults([]); // Optional: Don't clear results on slider update for smoother feel
+        const currentSearchId = ++searchId.current;
+
         try {
             const res = await axios.post(`${API_BASE_URL}/search/text`, {
                 query: query,
                 top_k: k
                 // filters removed
             });
+
+            // Race condition guard: ignore if a newer search has started
+            if (currentSearchId !== searchId.current) return;
+
             setResults(res.data);
             if (res.data.length > 0 && !toast) setToast({ type: 'success', message: `Found ${res.data.length} exquisite items matching your vision.` });
-        } catch (err) { console.error("Search failed", err); } finally { setLoading(false); }
+        } catch (err) {
+            console.error("Search failed", err);
+            if (currentSearchId === searchId.current) setToast({ type: 'error', message: "Search failed. Please try again." });
+        } finally {
+            if (currentSearchId === searchId.current) setLoading(false);
+        }
     };
 
     const handleTextSearch = (e) => {
@@ -91,26 +113,32 @@ function App() {
             return;
         }
 
-        // Convert Base64 to File object
-        const base64Response = await fetch(`data:image/jpeg;base64,${item.image_base64}`);
-        const blob = await base64Response.blob();
-        const file = new File([blob], "similar_item.jpg", { type: "image/jpeg" });
+        try {
 
-        setToast({ type: 'info', message: "Loading item into Visual Search..." });
+            // Convert Base64 to File object
+            const base64Response = await fetch(`data:image/jpeg;base64,${item.image_base64}`);
+            const blob = await base64Response.blob();
+            const file = new File([blob], "similar_item.jpg", { type: "image/jpeg" });
 
-        // Manual Reset sequence for transition
-        skipReset.current = true;
-        setResults([]);
-        setTextQuery("");
-        setExtractedText(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
+            setToast({ type: 'info', message: "Loading item into Visual Search..." });
 
-        // Switch to Image Tab
-        setActiveTab('image');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+            // Manual Reset sequence for transition
+            skipReset.current = true;
+            setResults([]);
+            setTextQuery("");
+            setExtractedText(null);
+            if (fileInputRef.current) fileInputRef.current.value = "";
 
-        // Trigger File Upload Logic (simulate drag & drop)
-        await handleFileUpload(file, 'image');
+            // Switch to Image Tab
+            setActiveTab('image');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Trigger File Upload Logic (simulate drag & drop)
+            await handleFileUpload(file, 'image');
+        } catch (err) {
+            console.error("Similar lookup failed", err);
+            setToast({ type: 'error', message: "Could not restore image for Visual Search." });
+        }
     };
 
     const handleVoiceSearch = () => {
@@ -142,16 +170,19 @@ function App() {
     const handleFileUpload = async (file, endpoint, silentUpdate = false) => {
         if (!file) return;
         setCurrentFile(file); // Store for reactive updates
+        const currentSearchId = ++searchId.current;
 
         if (!silentUpdate) {
             const reader = new FileReader();
-            reader.onload = (e) => setUploadPreview(e.target.result);
+            reader.onload = (e) => {
+                if (currentSearchId === searchId.current) setUploadPreview(e.target.result);
+            };
             reader.readAsDataURL(file);
 
             // Start Visual DNA Scan
             setIsScanning(true);
             setResults([]);
-            setExtractedText(null); // Reset extracted text
+            setExtractedText(null); // Reset extracted text immediately
 
             // Simulate AI Analysis Steps
             const steps = ["Identifying Geometry...", "Analyzing Light Refraction...", "Matching Historical Archives...", "Curating Selection..."];
@@ -160,11 +191,13 @@ function App() {
             }
 
             for (let i = 0; i < steps.length; i++) {
+                if (currentSearchId !== searchId.current) return; // Exit if newer search started
                 setScanStep(i);
                 await new Promise(r => setTimeout(r, 600)); // 600ms per step
             }
         }
 
+        if (currentSearchId !== searchId.current) return;
         setLoading(true);
         const formData = new FormData();
         formData.append('file', file);
@@ -177,15 +210,14 @@ function App() {
         try {
             const res = await axios.post(`${API_BASE_URL}/search/${endpoint}`, formData);
 
+            if (currentSearchId !== searchId.current) return;
+
             if (endpoint === 'handwriting') {
                 const results = res.data.results || [];
                 setResults(results);
 
                 const hasText = res.data.raw_text && res.data.raw_text.trim().length > 0;
 
-                // Set extracted text for feedback
-                // Only if not silent (or maybe we do want to update it?) 
-                // Let's update it to be safe
                 setExtractedText({
                     raw: res.data.raw_text || "",
                     refined: res.data.refined_text || "",
@@ -213,10 +245,16 @@ function App() {
                     }
                 }
             }
-        } catch (err) { console.error("Upload failed", err); if (!silentUpdate) setToast({ type: 'error', message: "Search failed. Please try again." }); }
-        finally {
-            setLoading(false);
-            if (!silentUpdate) setIsScanning(false);
+        } catch (err) {
+            console.error("Upload failed", err);
+            if (currentSearchId === searchId.current && !silentUpdate) {
+                setToast({ type: 'error', message: "Search failed. Please try again." });
+            }
+        } finally {
+            if (currentSearchId === searchId.current) {
+                setLoading(false);
+                if (!silentUpdate) setIsScanning(false);
+            }
         }
     };
 
@@ -345,8 +383,42 @@ function App() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.5, duration: 0.8 }}
+                                className="w-full"
                             >
                                 <LiveRatesTicker />
+                            </motion.div>
+
+                            {/* Home Gallery Section */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 40 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.7, duration: 1 }}
+                                className="w-full mt-24"
+                            >
+                                <div className="flex flex-col gap-2 mb-12">
+                                    <h3 className="text-sm text-[#D4AF37] font-bold tracking-[0.3em] uppercase opacity-80">The Anthology</h3>
+                                    <h2 className="text-4xl lg:text-5xl font-playfair text-white font-bold">Featured Collection</h2>
+                                </div>
+
+                                <div className="relative">
+                                    <ResultsGrid
+                                        loading={false}
+                                        results={homeResults}
+                                        onCardClick={(item) => setSelectedItem(item)}
+                                        onSimilar={handleSimilarSearch}
+                                        showAccuracy={false}
+                                    />
+
+                                    <div className="mt-16 flex justify-center">
+                                        <button
+                                            onClick={() => setActiveTab('text')}
+                                            className="px-10 py-4 rounded-full border border-white/10 bg-white/5 text-[#8B949E] hover:text-[#D4AF37] hover:border-[#D4AF37]/50 transition-all font-bold uppercase tracking-widest text-xs flex items-center gap-3 group"
+                                        >
+                                            Explore Complete Archive
+                                            <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                                        </button>
+                                    </div>
+                                </div>
                             </motion.div>
                         </motion.div>
                     )}

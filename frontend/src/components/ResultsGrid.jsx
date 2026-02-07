@@ -18,7 +18,7 @@ const itemAnim = {
     show: { opacity: 1, y: 0 }
 };
 
-const ResultsGrid = ({ results, onCardClick, loading, onSimilar }) => {
+const ResultsGrid = ({ results, onCardClick, loading, onSimilar, showAccuracy = true }) => {
     if (loading) {
         return (
             <div className='mt-8'>
@@ -52,7 +52,12 @@ const ResultsGrid = ({ results, onCardClick, loading, onSimilar }) => {
             >
                 {[...results].sort((a, b) => (b.score || 0) - (a.score || 0)).map((item, idx) => (
                     <motion.div key={idx} variants={itemAnim}>
-                        <ProductCard item={item} onClick={onCardClick} onSimilar={onSimilar} />
+                        <ProductCard
+                            item={item}
+                            onClick={onCardClick}
+                            onSimilar={onSimilar}
+                            showAccuracy={showAccuracy}
+                        />
                     </motion.div>
                 ))}
             </motion.div>
