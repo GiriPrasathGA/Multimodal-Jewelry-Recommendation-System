@@ -17,6 +17,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.embedder import CLIPEngine
 from utils.ocr import OCRManager
 from utils.hybrid import HybridSearcher
+from utils.reranker import Reranker
 
 app = FastAPI(title="JewelUX API")
 
@@ -32,6 +33,7 @@ app.add_middleware(
 # Global variables for resources
 engine = None
 ocr = None
+reranker = None
 index_std = None
 index_sbir = None
 metadata = None
@@ -40,12 +42,18 @@ hybrid_searcher = None
 
 @app.on_event("startup")
 def load_resources():
-    global engine, ocr, index_std, index_sbir, metadata, vectors, hybrid_searcher
+    global engine, ocr, reranker, index_std, index_sbir, metadata, vectors, hybrid_searcher
     
     print("Loading resources...")
     engine = CLIPEngine()
     ocr = OCRManager()
     ocr.load_model() # Optimization: Eager load at startup
+    
+    # Load Reranker (Lazy load or eager? Eager for now to ensure readiness)
+    try:
+        reranker = Reranker()
+    except Exception as e:
+        print(f"Warning: Failed to load Reranker: {e}")
     
     # Load FAISS indices
     if os.path.exists("embeddings/faiss_index.bin"):
@@ -61,7 +69,8 @@ def load_resources():
     # Load Metadata
     if os.path.exists("metadata/items.csv"):
         metadata = pd.read_csv("metadata/items.csv")
-        hybrid_searcher = HybridSearcher(metadata)
+        # Pass reranker to HybridSearcher
+        hybrid_searcher = HybridSearcher(metadata, reranker=reranker)
     else:
         print("Warning: Metadata CSV not found")
 
@@ -84,6 +93,7 @@ def get_base64_image(image_path):
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 12
+    # filters removed
 
 class SearchResponseItem(BaseModel):
     id: int
@@ -160,6 +170,7 @@ async def search_by_text(request: SearchRequest):
         D[0], 
         top_k=request.top_k,
         category_filter=detected_category
+        # filters removed
     )
     
     return format_results(ranked)
@@ -295,6 +306,60 @@ def get_tags():
     except Exception as e:
         print(f"Error fetching tags: {e}")
         return {"tags": []}
+
+class SimilarSearchRequest(BaseModel):
+    id: int
+    top_k: int = 12
+
+@app.post("/search/similar", response_model=List[SearchResponseItem])
+async def search_similar(request: SimilarSearchRequest):
+    if not hybrid_searcher or not engine:
+        raise HTTPException(status_code=503, detail="Resources not initialized")
+    
+    # 1. Get vector for the item
+    # vectors is a global numpy array
+    if vectors is None or request.id >= len(vectors):
+        raise HTTPException(status_code=404, detail="Item ID not found")
+        
+    target_vec = vectors[request.id].reshape(1, -1).astype('float32')
+    faiss.normalize_L2(target_vec)
+    
+    # 2. Search FAISS
+    # We ask for top_k + 1 because the item itself will be the first result (dist=0 or 1)
+    D, I = index_std.search(target_vec, k=request.top_k + 1)
+    
+    # 3. Use get_hybrid_scores mostly for formatting & potential filtering if we add it later
+    # We pass query_text="" so it relies purely on visual similarity for now.
+    # Note: We filter out the item itself in the logic below or via index slicing
+    
+    # Exclude the item itself (usually index 0)
+    # logic: I[0] is the list of indices. D[0] is distances.
+    # We check if request.id is in I[0] and remove it.
+    
+    found_indices = I[0]
+    found_scores = D[0]
+    
+    filtered_indices = []
+    filtered_scores = []
+    
+    for idx, score in zip(found_indices, found_scores):
+        if idx != request.id:
+            filtered_indices.append(idx)
+            filtered_scores.append(score)
+    
+    # Slice to top_k
+    filtered_indices = filtered_indices[:request.top_k]
+    filtered_scores = filtered_scores[:request.top_k]
+    
+    ranked = hybrid_searcher.get_hybrid_scores(
+        "", 
+        target_vec[0], 
+        filtered_indices, 
+        filtered_scores, 
+        top_k=request.top_k
+    )
+    
+    return format_results(ranked)
 
 @app.get("/health")
 def health_check():

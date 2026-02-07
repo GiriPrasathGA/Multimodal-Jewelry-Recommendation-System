@@ -1,8 +1,8 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Sparkles } from 'lucide-react';
 
-const ProductCard = ({ item, onClick }) => {
+const ProductCard = ({ item, onClick, onSimilar }) => {
     const ref = useRef(null);
     const [hover, setHover] = useState(false);
 
@@ -73,6 +73,12 @@ const ProductCard = ({ item, onClick }) => {
         y.set(0);
     };
 
+    const getBadgeStyle = (score) => {
+        if (score >= 0.9) return "bg-emerald-900/40 text-emerald-400 border-emerald-500/30";
+        if (score >= 0.7) return "bg-black/40 text-[#D4AF37] border-[#D4AF37]/30";
+        return "bg-gray-900/40 text-gray-400 border-gray-600/30";
+    };
+
     return (
         <motion.div
             ref={ref}
@@ -116,8 +122,8 @@ const ProductCard = ({ item, onClick }) => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-80 transition-opacity duration-300 group-hover:opacity-95 z-10" />
 
                 {/* Match Badge */}
-                <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-[#D4AF37]/30 text-[#D4AF37] text-xs font-bold tracking-wider shadow-lg z-30 transform translate-z-20">
-                    {Math.round(item.score * 100)}% MATCH
+                <div className={`absolute top-4 right-4 backdrop-blur-md px-3 py-1 rounded-full border text-xs font-bold tracking-wider shadow-lg z-30 transform translate-z-20 ${getBadgeStyle(item.score)}`}>
+                    {Math.round(item.score * 100)}% ACCURACY
                 </div>
 
                 {/* Content Slide-up */}
@@ -139,10 +145,27 @@ const ProductCard = ({ item, onClick }) => {
                         {item.description}
                     </p>
 
-                    <button className="w-full py-3 bg-white text-black font-bold uppercase tracking-widest text-xs rounded-lg transform translate-y-8 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-2 hover:bg-[#D4AF37]">
-                        Inquire Concierge
-                        <ArrowUpRight size={14} />
-                    </button>
+                    <div className="flex gap-2 w-full transform translate-y-8 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                console.log("ProductCard Similar Clicked", item);
+                                if (onSimilar) {
+                                    onSimilar(item);
+                                } else {
+                                    console.error("onSimilar prop is missing!");
+                                }
+                            }}
+                            className="flex-1 py-3 bg-white/10 backdrop-blur-md text-white font-bold uppercase tracking-widest text-[10px] rounded-lg border border-white/20 hover:bg-[#D4AF37] hover:text-black flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <Sparkles size={14} />
+                            Similar
+                        </button>
+                        <button className="flex-[2] py-3 bg-white text-black font-bold uppercase tracking-widest text-[10px] rounded-lg hover:bg-[#D4AF37] flex items-center justify-center gap-2 transition-colors">
+                            Inquire
+                            <ArrowUpRight size={14} />
+                        </button>
+                    </div>
                 </div>
             </div>
         </motion.div>

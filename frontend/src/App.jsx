@@ -2,15 +2,16 @@ import React, { useState, useRef } from 'react';
 import Navbar from './components/Navbar';
 import ResultsGrid from './components/ResultsGrid';
 import ProductModal from './components/ProductModal';
+// FilterSidebar removed
 import Toast from './components/Toast';
 import AuraCursor from './components/AuraCursor';
 import LiveRatesTicker from './components/LiveRatesTicker';
-import { Search, Upload, Loader2, Sparkles, ChevronRight } from 'lucide-react';
+import { Search, Upload, Loader2, Sparkles, ChevronRight, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 // Define API Base URL (Vercel support + Localhost fallback)
-const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`;
+const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8001`;
 
 function App() {
     const [activeTab, setActiveTab] = useState('home');
@@ -23,6 +24,9 @@ function App() {
     const [selectedItem, setSelectedItem] = useState(null);
     const [toast, setToast] = useState(null);
     const [quickTags, setQuickTags] = useState([]);
+    const [topK, setTopK] = useState(12); // User preference for result count
+    const [currentFile, setCurrentFile] = useState(null);
+    // filters state removed
     const fileInputRef = useRef(null);
 
     React.useEffect(() => {
@@ -43,17 +47,90 @@ function App() {
         fetchTags();
     }, []);
 
-    const handleTextSearch = async (e) => {
-        e.preventDefault();
-        if (!textQuery.trim()) return;
+    // Effect: Re-run search when topK changes
+    React.useEffect(() => {
+        if (loading) return; // Don't trigger if already searching (prevents double-tap issues)
+
+        // Debounce slightly to avoid rapid-fire API calls while sliding
+        const timer = setTimeout(() => {
+            if (activeTab === 'text' && textQuery) {
+                performTextSearch(textQuery, topK);
+            } else if (activeTab === 'image' && currentFile) {
+                handleFileUpload(currentFile, 'image', true); // true = silent update (no anim)
+            } else if (activeTab === 'handwriting' && currentFile) {
+                handleFileUpload(currentFile, handwritingMode, true);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [topK]); // Removed filters dependency
+
+    const performTextSearch = async (query, k) => {
+        if (!query.trim()) return;
         setLoading(true);
-        setResults([]); // Clear previous to show skeletons
+        // setResults([]); // Optional: Don't clear results on slider update for smoother feel
         try {
-            const res = await axios.post(`${API_BASE_URL}/search/text`, { query: textQuery, top_k: 12 });
+            const res = await axios.post(`${API_BASE_URL}/search/text`, {
+                query: query,
+                top_k: k
+                // filters removed
+            });
             setResults(res.data);
-            if (res.data.length > 0) setToast({ type: 'success', message: `Found ${res.data.length} exquisite items matching your vision.` });
-            else setToast({ type: 'info', message: "No exact matches found. Try a different description." });
+            if (res.data.length > 0 && !toast) setToast({ type: 'success', message: `Found ${res.data.length} exquisite items matching your vision.` });
         } catch (err) { console.error("Search failed", err); } finally { setLoading(false); }
+    };
+
+    const handleTextSearch = (e) => {
+        e.preventDefault();
+        performTextSearch(textQuery, topK);
+    };
+
+    const handleSimilarSearch = async (item) => {
+        if (!item?.image_base64) {
+            setToast({ type: 'error', message: "No image available for this item." });
+            return;
+        }
+
+        // Convert Base64 to File object
+        const base64Response = await fetch(`data:image/jpeg;base64,${item.image_base64}`);
+        const blob = await base64Response.blob();
+        const file = new File([blob], "similar_item.jpg", { type: "image/jpeg" });
+
+        setToast({ type: 'info', message: "Loading item into Visual Search..." });
+
+        // Manual Reset sequence for transition
+        skipReset.current = true;
+        setResults([]);
+        setTextQuery("");
+        setExtractedText(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+
+        // Switch to Image Tab
+        setActiveTab('image');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Trigger File Upload Logic (simulate drag & drop)
+        await handleFileUpload(file, 'image');
+    };
+
+    const handleVoiceSearch = () => {
+        if (!('webkitSpeechRecognition' in window)) {
+            setToast({ type: 'error', message: "Voice search not supported in this browser." });
+            return;
+        }
+        const recognition = new window.webkitSpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => setToast({ type: 'info', message: "Listening..." });
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            setTextQuery(transcript);
+            performTextSearch(transcript, topK);
+        };
+        recognition.onerror = () => setToast({ type: 'error', message: "Voice recognition failed." });
+
+        recognition.start();
     };
 
     const [isScanning, setIsScanning] = useState(false);
@@ -62,32 +139,36 @@ function App() {
     const [useLLM, setUseLLM] = useState(true);
     const [extractedText, setExtractedText] = useState(null);
 
-    const handleFileUpload = async (file, endpoint) => {
+    const handleFileUpload = async (file, endpoint, silentUpdate = false) => {
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => setUploadPreview(e.target.result);
-        reader.readAsDataURL(file);
+        setCurrentFile(file); // Store for reactive updates
 
-        // Start Visual DNA Scan
-        setIsScanning(true);
-        setResults([]);
-        setExtractedText(null); // Reset extracted text
+        if (!silentUpdate) {
+            const reader = new FileReader();
+            reader.onload = (e) => setUploadPreview(e.target.result);
+            reader.readAsDataURL(file);
 
-        // Simulate AI Analysis Steps
-        const steps = ["Identifying Geometry...", "Analyzing Light Refraction...", "Matching Historical Archives...", "Curating Selection..."];
-        if (endpoint === 'handwriting') {
-            steps.splice(0, steps.length, useLLM ? "🤖 AI reading & refining..." : "🔍 Extracting text...");
-        }
+            // Start Visual DNA Scan
+            setIsScanning(true);
+            setResults([]);
+            setExtractedText(null); // Reset extracted text
 
-        for (let i = 0; i < steps.length; i++) {
-            setScanStep(i);
-            await new Promise(r => setTimeout(r, 600)); // 600ms per step
+            // Simulate AI Analysis Steps
+            const steps = ["Identifying Geometry...", "Analyzing Light Refraction...", "Matching Historical Archives...", "Curating Selection..."];
+            if (endpoint === 'handwriting') {
+                steps.splice(0, steps.length, useLLM ? "🤖 AI reading & refining..." : "🔍 Extracting text...");
+            }
+
+            for (let i = 0; i < steps.length; i++) {
+                setScanStep(i);
+                await new Promise(r => setTimeout(r, 600)); // 600ms per step
+            }
         }
 
         setLoading(true);
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('top_k', 12);
+        formData.append('top_k', topK);
 
         if (endpoint === 'handwriting') {
             formData.append('use_llm', useLLM);
@@ -103,6 +184,8 @@ function App() {
                 const hasText = res.data.raw_text && res.data.raw_text.trim().length > 0;
 
                 // Set extracted text for feedback
+                // Only if not silent (or maybe we do want to update it?) 
+                // Let's update it to be safe
                 setExtractedText({
                     raw: res.data.raw_text || "",
                     refined: res.data.refined_text || "",
@@ -110,26 +193,30 @@ function App() {
                     hasText: hasText
                 });
 
-                if (results.length > 0) {
-                    setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
-                } else if (!hasText) {
-                    setToast({ type: 'error', message: "No text could be extracted. Please try a clearer image." });
-                } else {
-                    setToast({ type: 'info', message: "Text detected, but no matching jewelry found." });
+                if (!silentUpdate) {
+                    if (results.length > 0) {
+                        setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
+                    } else if (!hasText) {
+                        setToast({ type: 'error', message: "No text could be extracted. Please try a clearer image." });
+                    } else {
+                        setToast({ type: 'info', message: "Text detected, but no matching jewelry found." });
+                    }
                 }
 
             } else {
                 setResults(res.data);
-                if (res.data.length > 0) {
-                    setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
-                } else {
-                    setToast({ type: 'info', message: "No matches found for this visual input." });
+                if (!silentUpdate) {
+                    if (res.data.length > 0) {
+                        setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
+                    } else {
+                        setToast({ type: 'info', message: "No matches found for this visual input." });
+                    }
                 }
             }
-        } catch (err) { console.error("Upload failed", err); setToast({ type: 'error', message: "Search failed. Please try again." }); }
+        } catch (err) { console.error("Upload failed", err); if (!silentUpdate) setToast({ type: 'error', message: "Search failed. Please try again." }); }
         finally {
             setLoading(false);
-            setIsScanning(false);
+            if (!silentUpdate) setIsScanning(false);
         }
     };
 
@@ -144,14 +231,24 @@ function App() {
         else if (e.type === "dragleave") setDragActive(false);
     };
 
+    const skipReset = useRef(false);
+
     const resetSearch = () => {
         setResults([]);
         setTextQuery("");
         setUploadPreview(null);
         setExtractedText(null);
+        setCurrentFile(null); // Reset stored file
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
-    React.useEffect(() => { resetSearch(); }, [activeTab]);
+
+    React.useEffect(() => {
+        if (skipReset.current) {
+            skipReset.current = false;
+            return;
+        }
+        resetSearch();
+    }, [activeTab]);
 
     return (
         <div className="flex min-h-screen selection:bg-[#D4AF37]/30 selection:text-white overflow-hidden relative cursor-none">
@@ -188,7 +285,22 @@ function App() {
                         <ChevronRight size={14} />
                         <span className="text-white">{activeTab.replace(/^\w/, c => c.toUpperCase())}</span>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-6">
+                        {/* Result Count Slider */}
+                        <div className="hidden lg:flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/10">
+                            <span className="text-[#8B949E] text-xs font-bold uppercase tracking-wider">Results</span>
+                            <input
+                                type="range"
+                                min="4"
+                                max="24"
+                                step="4"
+                                value={topK}
+                                onChange={(e) => setTopK(parseInt(e.target.value))}
+                                className="w-24 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[#D4AF37]"
+                            />
+                            <span className="text-[#D4AF37] text-xs font-bold w-4 text-center">{topK}</span>
+                        </div>
+
                         <div className="w-10 h-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center shadow-lg shadow-[#D4AF37]/5 backdrop-blur-md">
                             <Sparkles size={16} className="text-[#D4AF37]" />
                         </div>
@@ -205,9 +317,9 @@ function App() {
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
                             className="flex flex-col items-start justify-center min-h-[60vh] relative"
                         >
-                            <div className="mb-8 inline-flex items-center gap-3 px-4 py-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/5 backdrop-blur-sm">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-pulse" />
-                                <span className="text-[#D4AF37] text-xs font-bold tracking-widest uppercase">Jewelry v5.0</span>
+                            <div className="mb-8 inline-flex items-center gap-3 px-4 py-2 rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/5 backdrop-blur-sm shadow-[0_0_15px_-5px_#D4AF37]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-pulse shadow-[0_0_10px_#D4AF37]" />
+                                <span className="text-[#D4AF37] text-xs font-bold tracking-[0.2em] uppercase shadow-[#D4AF37]/50">Jewelry v5.0</span>
                             </div>
 
                             <h1 className="text-5xl lg:text-8xl font-playfair font-bold text-transparent bg-clip-text bg-gradient-to-br from-white via-white to-white/40 mb-8 leading-tight drop-shadow-2xl">
@@ -242,10 +354,11 @@ function App() {
                     {/* SEARCH LAYOUTS */}
                     {activeTab !== 'home' && (
                         <motion.div
-                            key="search"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
+                            key={activeTab} // Use activeTab as key to trigger animation on switch
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                         >
                             {/* INPUT SECTION */}
                             {activeTab === 'text' && (
@@ -269,6 +382,16 @@ function App() {
                                                 placeholder="e.g., A vintage emerald necklace..."
                                                 className="w-full bg-transparent text-white p-4 text-2xl focus:outline-none placeholder:text-[#8B949E]/40 font-playfair italic tracking-wide"
                                             />
+
+                                            {/* Voice Search */}
+                                            <button
+                                                type="button"
+                                                onClick={handleVoiceSearch}
+                                                className="p-3 mr-2 hover:bg-white/10 rounded-full transition-colors text-[#8B949E] hover:text-[#D4AF37]"
+                                            >
+                                                <Mic size={20} />
+                                            </button>
+
                                             <button
                                                 type="submit"
                                                 disabled={loading}
@@ -449,6 +572,7 @@ function App() {
                                 loading={loading}
                                 results={results}
                                 onCardClick={(item) => setSelectedItem(item)}
+                                onSimilar={handleSimilarSearch}
                             />
                         </motion.div>
                     )}

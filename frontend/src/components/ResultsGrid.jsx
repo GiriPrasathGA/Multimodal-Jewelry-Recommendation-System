@@ -18,7 +18,7 @@ const itemAnim = {
     show: { opacity: 1, y: 0 }
 };
 
-const ResultsGrid = ({ results, onCardClick, loading }) => {
+const ResultsGrid = ({ results, onCardClick, loading, onSimilar }) => {
     if (loading) {
         return (
             <div className='mt-8'>
@@ -50,9 +50,9 @@ const ResultsGrid = ({ results, onCardClick, loading }) => {
                 animate="show"
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
             >
-                {results.map((item, idx) => (
+                {[...results].sort((a, b) => (b.score || 0) - (a.score || 0)).map((item, idx) => (
                     <motion.div key={idx} variants={itemAnim}>
-                        <ProductCard item={item} onClick={onCardClick} />
+                        <ProductCard item={item} onClick={onCardClick} onSimilar={onSimilar} />
                     </motion.div>
                 ))}
             </motion.div>
