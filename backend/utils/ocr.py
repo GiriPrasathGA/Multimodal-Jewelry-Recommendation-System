@@ -44,31 +44,42 @@ class OCRManager:
         return Image.fromarray(cv2.cvtColor(th, cv2.COLOR_GRAY2RGB))
 
     def clean_query_with_llm(self, raw_text):
-        """Uses LLM to correct OCR errors and standardize jewelry terms."""
+        """Uses LLM to correct OCR errors and extract category."""
         prompt = f"""
-        You are a jewelry search assistant. Your task is to clean up noisy OCR text extracted from a handwritten note.
+        You are a jewelry search assistant. Your task is to clean up noisy OCR text extracted from a handwritten note AND detect the jewelry category.
         
         RULES:
         1. Correct spelling errors (e.g., 'diomond' -> 'diamond', 'neklace' -> 'necklace').
         2. Standardize terms: Use 'ring', 'necklace', 'earring', 'bracelet', 'bangle'.
         3. Standardize stones: Use 'diamond', 'ruby', 'emerald', 'sapphire', 'white stone'.
         4. Remove noise (special characters, random letters).
-        5. Output ONLY a short, clean search query string.
+        5. Output a VALID JSON object with two fields: "query" (cleaned text) and "category" (one of: ring, necklace, bracelet, earring, or null if unknown).
 
         Raw OCR Text: "{raw_text}"
-        Cleaned Query:"""
+        
+        Output JSON:"""
 
         try:
             response = self.llm_client.chat.completions.create(
                 model="gpt-4.1-nano", # or your specific model
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
-                max_tokens=20
+                max_tokens=60,
+                response_format={ "type": "json_object" }
             )
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content.strip()
+            
+            import json
+            try:
+                data = json.loads(content)
+                return data.get("query", raw_text), data.get("category", None)
+            except json.JSONDecodeError:
+                # Fallback if LLM fails to output valid JSON (rare with json_object mode but possible)
+                return content, None
+                
         except Exception as e:
             print(f"LLM Error: {e}")
-            return raw_text # Fallback to raw text if API fails
+            return raw_text, None # Fallback to raw text if API fails
 
     def load_model(self):
         """Loads the TrOCR model into memory."""
@@ -94,8 +105,7 @@ class OCRManager:
                 self.load_model()
 
             if self.model is None:
-                return "", "" # Failed to load
-
+                return "", "", None # Failed to load
 
             pixel_values = self.processor(processed_pil, return_tensors="pt").pixel_values.to(self.device)
             with torch.no_grad():
@@ -103,14 +113,17 @@ class OCRManager:
             
             raw_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             
+            detected_category = None
+            cleaned_text = raw_text
+
             # Step C: LLM Refinement
             if raw_text.strip():
                 if use_llm:
-                    cleaned_text = self.clean_query_with_llm(raw_text)
-                    return raw_text, cleaned_text
+                    cleaned_text, detected_category = self.clean_query_with_llm(raw_text)
+                    return raw_text, cleaned_text, detected_category
                 else:
-                    return raw_text, raw_text # Return raw_text as refined_text when LLM is off
-            return "", ""
+                    return raw_text, raw_text, None 
+            return "", "", None
         except Exception as e:
             print(f"OCR Error: {e}")
-            return "", ""
+            return "", "", None

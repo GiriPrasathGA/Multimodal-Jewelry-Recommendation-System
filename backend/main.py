@@ -208,7 +208,7 @@ async def search_by_handwriting(file: UploadFile = File(...), top_k: int = Form(
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert('RGB')
     
-    raw_ocr, cleaned_query = ocr.extract_text(image, use_llm=use_llm)
+    raw_ocr, cleaned_query, detected_category = ocr.extract_text(image, use_llm=use_llm)
     
     if not cleaned_query:
         # If no text found, return empty results with empty text fields
@@ -219,7 +219,14 @@ async def search_by_handwriting(file: UploadFile = File(...), top_k: int = Form(
     faiss.normalize_L2(q_vec)
     
     D, I = index_std.search(q_vec, k=50)
-    ranked = hybrid_searcher.get_hybrid_scores(cleaned_query, q_vec[0], I[0], D[0], top_k=top_k)
+    ranked = hybrid_searcher.get_hybrid_scores(
+        cleaned_query, 
+        q_vec[0], 
+        I[0], 
+        D[0], 
+        top_k=top_k,
+        category_filter=detected_category
+    )
     
     formatted_results = format_results(ranked)
     

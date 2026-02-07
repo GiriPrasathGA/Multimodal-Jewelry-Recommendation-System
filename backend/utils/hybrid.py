@@ -44,8 +44,10 @@ class HybridSearcher:
                 
             k_score = bm25_scores[idx]
             
-            # Adjusted Weights: 50% Visual, 50% Keyword (User Request)
-            total_score = (v_score * 0.5) + (k_score * 0.5)
+            # Adjusted Weights: 40% Visual, 60% Keyword (User Request for "Accuracy++")
+            # We favor keywords slightly more to ensure specific terms like "ruby" or "emerald" 
+            # aren't overpowered by generic visual similarity.
+            total_score = (v_score * 0.4 + (k_score * 0.6))
             
             final_ranked_results.append({
                 "metadata": item,
