@@ -7,14 +7,13 @@ import numpy as np
 class CLIPEngine:
     def __init__(self, model_name="ViT-B/32"):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        # jit=False reduces memory usage significantly
-        self.model, self.preprocess = clip.load(model_name, device=self.device, jit=False)
+        self.model, self.preprocess = clip.load(model_name, device=self.device)
 
-    def get_image_embedding(self, image_path_or_pill):
-        if isinstance(image_path_or_pill, str):
-            image = self.preprocess(Image.open(image_path_or_pill)).unsqueeze(0).to(self.device)
+    def get_image_embedding(self, image_path_or_pil):
+        if isinstance(image_path_or_pil, str):
+            image = self.preprocess(Image.open(image_path_or_pil)).unsqueeze(0).to(self.device)
         else:
-            image = self.preprocess(image_path_or_pill).unsqueeze(0).to(self.device)
+            image = self.preprocess(image_path_or_pil).unsqueeze(0).to(self.device)
         
         with torch.no_grad():
             embedding = self.model.encode_image(image)
@@ -36,7 +35,8 @@ class CLIPEngine:
         return self.get_image_embedding(final_img)
 
     def get_text_embedding(self, text):
-        text_tokens = clip.tokenize([text]).to(self.device)
+        # Truncate text to 77 tokens to prevent CLIP crash
+        text_tokens = clip.tokenize([text], truncate=True).to(self.device)
         with torch.no_grad():
             embedding = self.model.encode_text(text_tokens)
         return embedding.cpu().numpy().flatten()

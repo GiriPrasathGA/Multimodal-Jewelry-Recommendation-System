@@ -164,18 +164,19 @@ async def search_by_sketch(file: UploadFile = File(...), top_k: int = Form(12)):
     
     return format_results(ranked)
 
-@app.post("/search/handwriting", response_model=List[SearchResponseItem])
-async def search_by_handwriting(file: UploadFile = File(...), top_k: int = Form(12)):
+@app.post("/search/handwriting", response_model=dict)
+async def search_by_handwriting(file: UploadFile = File(...), top_k: int = Form(12), use_llm: bool = Form(True)):
     if not hybrid_searcher or not engine or not ocr:
         raise HTTPException(status_code=503, detail="Resources not initialized")
 
     contents = await file.read()
     image = Image.open(io.BytesIO(contents)).convert('RGB')
     
-    raw_ocr, cleaned_query = ocr.extract_text(image)
+    raw_ocr, cleaned_query = ocr.extract_text(image, use_llm=use_llm)
     
     if not cleaned_query:
-        return []
+        # If no text found, return empty results with empty text fields
+        return {"results": [], "raw_text": "", "refined_text": ""}
 
     query_vec = engine.get_text_embedding(cleaned_query)
     q_vec = query_vec.reshape(1, -1).astype('float32')
@@ -184,8 +185,13 @@ async def search_by_handwriting(file: UploadFile = File(...), top_k: int = Form(
     D, I = index_std.search(q_vec, k=50)
     ranked = hybrid_searcher.get_hybrid_scores(cleaned_query, q_vec[0], I[0], D[0], top_k=top_k)
     
-    # TODO: Could return the cleaned query too if the UI wants to show it
-    return format_results(ranked)
+    formatted_results = format_results(ranked)
+    
+    return {
+        "results": formatted_results,
+        "raw_text": raw_ocr,
+        "refined_text": cleaned_query if use_llm else "" 
+    }
 
 @app.get("/tags")
 def get_tags():

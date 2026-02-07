@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Navbar from './components/Navbar';
 import ResultsGrid from './components/ResultsGrid';
 import ProductModal from './components/ProductModal';
@@ -9,8 +9,8 @@ import { Search, Upload, Loader2, Sparkles, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
-// Define API Base URL (Vercel support)
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// Define API Base URL (Vercel support + Localhost fallback)
+const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`;
 
 function App() {
     const [activeTab, setActiveTab] = useState('home');
@@ -23,6 +23,7 @@ function App() {
     const [selectedItem, setSelectedItem] = useState(null);
     const [toast, setToast] = useState(null);
     const [quickTags, setQuickTags] = useState([]);
+    const fileInputRef = useRef(null);
 
     React.useEffect(() => {
         const fetchTags = async () => {
@@ -58,6 +59,9 @@ function App() {
     const [isScanning, setIsScanning] = useState(false);
     const [scanStep, setScanStep] = useState(0);
 
+    const [useLLM, setUseLLM] = useState(true);
+    const [extractedText, setExtractedText] = useState(null);
+
     const handleFileUpload = async (file, endpoint) => {
         if (!file) return;
         const reader = new FileReader();
@@ -67,9 +71,14 @@ function App() {
         // Start Visual DNA Scan
         setIsScanning(true);
         setResults([]);
+        setExtractedText(null); // Reset extracted text
 
         // Simulate AI Analysis Steps
         const steps = ["Identifying Geometry...", "Analyzing Light Refraction...", "Matching Historical Archives...", "Curating Selection..."];
+        if (endpoint === 'handwriting') {
+            steps.splice(0, steps.length, useLLM ? "🤖 AI reading & refining..." : "🔍 Extracting text...");
+        }
+
         for (let i = 0; i < steps.length; i++) {
             setScanStep(i);
             await new Promise(r => setTimeout(r, 600)); // 600ms per step
@@ -79,11 +88,45 @@ function App() {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('top_k', 12);
+
+        if (endpoint === 'handwriting') {
+            formData.append('use_llm', useLLM);
+        }
+
         try {
             const res = await axios.post(`${API_BASE_URL}/search/${endpoint}`, formData);
-            setResults(res.data);
-            setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
-        } catch (err) { console.error("Upload failed", err); }
+
+            if (endpoint === 'handwriting') {
+                const results = res.data.results || [];
+                setResults(results);
+
+                const hasText = res.data.raw_text && res.data.raw_text.trim().length > 0;
+
+                // Set extracted text for feedback
+                setExtractedText({
+                    raw: res.data.raw_text || "",
+                    refined: res.data.refined_text || "",
+                    usedLLM: useLLM,
+                    hasText: hasText
+                });
+
+                if (results.length > 0) {
+                    setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
+                } else if (!hasText) {
+                    setToast({ type: 'error', message: "No text could be extracted. Please try a clearer image." });
+                } else {
+                    setToast({ type: 'info', message: "Text detected, but no matching jewelry found." });
+                }
+
+            } else {
+                setResults(res.data);
+                if (res.data.length > 0) {
+                    setToast({ type: 'success', message: "Visual analysis complete. Presenting curated matches." });
+                } else {
+                    setToast({ type: 'info', message: "No matches found for this visual input." });
+                }
+            }
+        } catch (err) { console.error("Upload failed", err); setToast({ type: 'error', message: "Search failed. Please try again." }); }
         finally {
             setLoading(false);
             setIsScanning(false);
@@ -101,7 +144,13 @@ function App() {
         else if (e.type === "dragleave") setDragActive(false);
     };
 
-    const resetSearch = () => { setResults([]); setTextQuery(""); setUploadPreview(null); };
+    const resetSearch = () => {
+        setResults([]);
+        setTextQuery("");
+        setUploadPreview(null);
+        setExtractedText(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
     React.useEffect(() => { resetSearch(); }, [activeTab]);
 
     return (
@@ -271,7 +320,11 @@ function App() {
                                                 <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center">
                                                     <div className="w-full h-1 bg-[#D4AF37] shadow-[0_0_20px_#D4AF37] absolute top-0 animate-scan-down"></div>
                                                     <div className="text-[#D4AF37] font-mono text-sm tracking-[0.2em] mb-4 animate-pulse">
-                                                        {["Identifying Geometry...", "Analyzing Light Refraction...", "Matching Historical Archives...", "Curating Selection..."][scanStep]}
+                                                        {/* Dynamic Label for Spinner */}
+                                                        {(activeTab === 'handwriting' && handwritingMode === 'handwriting')
+                                                            ? (useLLM ? "🤖 AI reading & refining..." : "🔍 Extracting text...")
+                                                            : ["Identifying Geometry...", "Analyzing Light Refraction...", "Matching Historical Archives...", "Curating Selection..."][scanStep]
+                                                        }
                                                     </div>
 
                                                     {/* Holographic Grid */}
@@ -279,7 +332,7 @@ function App() {
                                                 </div>
                                             )}
 
-                                            <input type="file" id="file" className="hidden" onChange={(e) => handleFileUpload(e.target.files[0], activeTab === 'image' ? 'image' : handwritingMode)} />
+                                            <input type="file" id="file" ref={fileInputRef} className="hidden" onChange={(e) => handleFileUpload(e.target.files[0], activeTab === 'image' ? 'image' : handwritingMode)} />
 
                                             {!uploadPreview ? (
                                                 <label htmlFor="file" className="text-center cursor-pointer p-10 w-full h-full flex flex-col items-center justify-center z-20">
@@ -298,6 +351,42 @@ function App() {
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Extracted Text Feedback */}
+                                        {extractedText && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="mt-6 p-6 rounded-2xl glass-panel border border-[#D4AF37]/30 bg-[#D4AF37]/5"
+                                            >
+                                                {!extractedText.hasText ? (
+                                                    <div className="flex flex-col items-center justify-center py-4 text-center">
+                                                        <Search size={24} className="text-[#8B949E] mb-2 opacity-50" />
+                                                        <p className="text-[#8B949E] text-sm uppercase tracking-widest font-bold">No Text Detected</p>
+                                                        <p className="text-white/40 text-xs mt-1">Try uploading a clearer image.</p>
+                                                    </div>
+                                                ) : extractedText.usedLLM ? (
+                                                    <div>
+                                                        <p className="text-[#8B949E] text-xs uppercase tracking-widest mb-2">Raw Text</p>
+                                                        <p className="text-white/60 mb-4 font-mono text-sm line-through decoration-red-500/50">{extractedText.raw}</p>
+
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Sparkles size={16} className="text-[#D4AF37]" />
+                                                            <p className="text-[#D4AF37] text-xs uppercase tracking-widest font-bold">AI Refined</p>
+                                                        </div>
+                                                        <p className="text-white text-lg font-playfair">{extractedText.refined}</p>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Search size={16} className="text-[#8B949E]" />
+                                                            <p className="text-[#8B949E] text-xs uppercase tracking-widest font-bold">Extracted Text</p>
+                                                        </div>
+                                                        <p className="text-white text-lg font-playfair">{extractedText.raw}</p>
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        )}
                                     </div>
 
                                     {activeTab === 'handwriting' && (
@@ -307,7 +396,7 @@ function App() {
                                                 {['sketch', 'handwriting'].map((mode) => (
                                                     <div
                                                         key={mode}
-                                                        onClick={() => setHandwritingMode(mode)}
+                                                        onClick={() => { setHandwritingMode(mode); resetSearch(); }}
                                                         className={`p-4 rounded-xl cursor-pointer border transition-all duration-300 ${handwritingMode === mode
                                                             ? 'bg-[#D4AF37]/20 border-[#D4AF37] shadow-[0_0_20px_-5px_#D4AF37]'
                                                             : 'bg-transparent border-white/10 hover:bg-white/5'
@@ -325,6 +414,31 @@ function App() {
                                                     </div>
                                                 ))}
                                             </div>
+
+                                            {/* LLM Toggle - Only show in Handwriting Mode */}
+                                            <AnimatePresence>
+                                                {handwritingMode === 'handwriting' && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        className="mt-6 pt-6 border-t border-white/10"
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <h4 className="text-white font-bold text-sm">Enable LLM Refinement</h4>
+                                                                <p className="text-[#8B949E] text-xs mt-1">Use AI to correct spelling & artifacts</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setUseLLM(!useLLM)}
+                                                                className={`w-12 h-6 rounded-full transition-colors relative ${useLLM ? 'bg-[#D4AF37]' : 'bg-white/10'}`}
+                                                            >
+                                                                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 ${useLLM ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
                                     )}
                                 </div>

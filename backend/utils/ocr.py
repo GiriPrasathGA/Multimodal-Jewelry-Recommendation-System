@@ -70,7 +70,7 @@ class OCRManager:
             print(f"LLM Error: {e}")
             return raw_text # Fallback to raw text if API fails
 
-    def extract_text(self, pil_image):
+    def extract_text(self, pil_image, use_llm=True):
         try:
             # Step A: Preprocess
             processed_pil = self.preprocess_image(pil_image)
@@ -92,8 +92,11 @@ class OCRManager:
             
             # Step C: LLM Refinement
             if raw_text.strip():
-                cleaned_text = self.clean_query_with_llm(raw_text)
-                return raw_text, cleaned_text
+                if use_llm:
+                    cleaned_text = self.clean_query_with_llm(raw_text)
+                    return raw_text, cleaned_text
+                else:
+                    return raw_text, raw_text # Return raw_text as refined_text when LLM is off
             return "", ""
         except Exception as e:
             print(f"OCR Error: {e}")

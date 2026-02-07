@@ -43,4 +43,3 @@ npm run dev
 - **Smart Filters**: Dynamic tags fetched from your dataset descriptions.
 - **Hybrid Search**: Text, Image, and Sketch search capabilities.
 - **Visuals**: "Liquid Gold" atmosphere and holographic interactions.
-.

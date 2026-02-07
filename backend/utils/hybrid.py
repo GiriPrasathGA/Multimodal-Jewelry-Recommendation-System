@@ -22,6 +22,11 @@ class HybridSearcher:
         final_ranked_results = []
         for i, idx in enumerate(visual_indices):
             v_score = visual_scores[i]
+            
+            # Safety check: ensure FAISS index matches BM25 corpus size
+            if idx >= len(bm25_scores):
+                continue
+                
             k_score = bm25_scores[idx]
             
             # 70% Visual weight, 30% Keyword weight
