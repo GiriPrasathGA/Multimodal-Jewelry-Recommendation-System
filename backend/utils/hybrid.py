@@ -8,10 +8,16 @@ class HybridSearcher:
         self.corpus = [str(d).lower().split() for d in self.df['description'].fillna("").tolist()]
         self.bm25 = BM25Okapi(self.corpus)
 
-    def get_hybrid_scores(self, query_text, query_vec, visual_indices, visual_scores, top_k=10):
+    def get_hybrid_scores(self, query_text, query_vec, visual_indices, visual_scores, top_k=10, category_filter=None):
         if not query_text or query_text.strip() == "":
-            return [{"metadata": self.df.iloc[idx].to_dict(), "score": visual_scores[i]} 
-                    for i, idx in enumerate(visual_indices)][:top_k]
+            # If no text, just return visual matches (filtering if needed)
+            results = []
+            for i, idx in enumerate(visual_indices):
+                item = self.df.iloc[idx].to_dict()
+                if category_filter and item.get('category', '').lower() != category_filter.lower():
+                    continue
+                results.append({"metadata": item, "score": visual_scores[i]})
+            return results[:top_k]
 
         query_tokens = query_text.lower().split()
         bm25_scores = self.bm25.get_scores(query_tokens)
@@ -26,14 +32,23 @@ class HybridSearcher:
             # Safety check: ensure FAISS index matches BM25 corpus size
             if idx >= len(bm25_scores):
                 continue
+
+            item = self.df.iloc[idx].to_dict()
+
+            # --- METADATA FILTERING ---
+            # If a category is detected (e.g. "ring"), penalize or exclude other categories
+            if category_filter:
+                item_category = str(item.get('category', '')).lower().strip()
+                if item_category != category_filter.lower():
+                    continue # Strict filtering: Skip items that don't match
                 
             k_score = bm25_scores[idx]
             
-            # 70% Visual weight, 30% Keyword weight
-            total_score = (v_score * 0.7) + (k_score * 0.3)
+            # Adjusted Weights: 50% Visual, 50% Keyword (User Request)
+            total_score = (v_score * 0.5) + (k_score * 0.5)
             
             final_ranked_results.append({
-                "metadata": self.df.iloc[idx].to_dict(),
+                "metadata": item,
                 "score": total_score
             })
 

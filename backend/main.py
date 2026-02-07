@@ -120,12 +120,47 @@ async def search_by_text(request: SearchRequest):
     if not hybrid_searcher or not engine:
         raise HTTPException(status_code=503, detail="Resources not initialized")
 
+    # --- INTENT DETECTION ---
+    # Simple rule-based detection for now. Can be upgraded to LLM later.
+    query_lower = request.query.lower()
+    detected_category = None
+    
+    # Map synonyms to canonical category names (based on items.csv)
+    # Categories seen: 'necklace', 'ring' (from sample). 
+    # Validating with simple mapping:
+    category_map = {
+        "ring": "ring",
+        "rings": "ring",
+        "band": "ring",
+        "necklace": "necklace",
+        "necklaces": "necklace",
+        "chain": "necklace",
+        "pendant": "necklace",
+        "earring": "earring", # Assuming these exist or will exist
+        "earrings": "earring",
+        "bracelet": "bracelet", # Assuming these exist
+        "bracelets": "bracelet",
+        "bangle": "bracelet"
+    }
+
+    for keyword, category in category_map.items():
+        if keyword in query_lower:
+            detected_category = category
+            break # Stop at first match (simplistic but works for "gold ring")
+
     query_vec = engine.get_text_embedding(request.query)
     q_vec = query_vec.reshape(1, -1).astype('float32')
     faiss.normalize_L2(q_vec)
     
     D, I = index_std.search(q_vec, k=50)
-    ranked = hybrid_searcher.get_hybrid_scores(request.query, q_vec[0], I[0], D[0], top_k=request.top_k)
+    ranked = hybrid_searcher.get_hybrid_scores(
+        request.query, 
+        q_vec[0], 
+        I[0], 
+        D[0], 
+        top_k=request.top_k,
+        category_filter=detected_category
+    )
     
     return format_results(ranked)
 
