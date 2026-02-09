@@ -1,11 +1,13 @@
 services:
   - type: web
     name: jewelux-backend
+    id: jewelux-backend
     runtime: docker
-    dockerContext: backend
+    rootDirectory: backend
     dockerfilePath: Dockerfile
     plan: free
+    region: oregon
     envVars:
       - key: PORT
-        value: 10000
+        value: "10000"
     healthCheckPath: /health
