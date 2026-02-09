@@ -42,47 +42,70 @@ hybrid_searcher = None
 
 @app.on_event("startup")
 def load_resources():
-    global engine, ocr, reranker, index_std, index_sbir, metadata, vectors, hybrid_searcher
+    global metadata, hybrid_searcher
     
-    print("Loading resources...")
-    engine = CLIPEngine()
-    ocr = OCRManager()
-    ocr.load_model() # Optimization: Eager load at startup
-    
-    # Load Reranker (Lazy load or eager? Eager for now to ensure readiness)
-    try:
-        reranker = Reranker()
-    except Exception as e:
-        print(f"Warning: Failed to load Reranker: {e}")
-    
-    # Load FAISS indices
-    if os.path.exists("embeddings/faiss_index.bin"):
-        index_std = faiss.read_index("embeddings/faiss_index.bin")
-    else:
-        print("Warning: Standard index not found")
-        
-    if os.path.exists("embeddings/faiss_sbir_index.bin"):
-        index_sbir = faiss.read_index("embeddings/faiss_sbir_index.bin")
-    else:
-        print("Warning: SBIR index not found")
-
-    # Load Metadata
+    print("Loading lightweight resources...")
+    # Load Metadata (Small, safe for startup)
     if os.path.exists("metadata/items.csv"):
         metadata = pd.read_csv("metadata/items.csv")
-        # Pass reranker to HybridSearcher
-        hybrid_searcher = HybridSearcher(metadata, reranker=reranker)
+        hybrid_searcher = HybridSearcher(metadata, reranker=None) # Reranker will be attached later
+        print("Metadata and HybridSearcher initialized.")
     else:
         print("Warning: Metadata CSV not found")
 
-    # Load Vectors
-    if os.path.exists("embeddings/image_vectors.npy"):
-        vectors = np.load("embeddings/image_vectors.npy")
-    else:
-        print("Warning: Image vectors not found")
-        
-    print("Resources loaded!")
     import gc
     gc.collect()
+    print("Startup complete.")
+
+def get_engine():
+    global engine
+    if engine is None:
+        print("Lazy-loading CLIP Engine...")
+        from utils.embedder import CLIPEngine
+        engine = CLIPEngine()
+        import gc
+        gc.collect()
+    return engine
+
+def get_reranker():
+    global reranker, hybrid_searcher
+    if reranker is None:
+        print("Lazy-loading Reranker...")
+        from utils.reranker import Reranker
+        try:
+            reranker = Reranker()
+            if hybrid_searcher:
+                hybrid_searcher.reranker = reranker
+            import gc
+            gc.collect()
+        except Exception as e:
+            print(f"Warning: Failed to load Reranker: {e}")
+    return reranker
+
+def get_ocr():
+    global ocr
+    if ocr is None:
+        print("Lazy-loading OCR Manager...")
+        ocr = OCRManager()
+        ocr.load_model()
+        import gc
+        gc.collect()
+    return ocr
+
+def get_indices():
+    global index_std, index_sbir
+    if index_std is None:
+        if os.path.exists("embeddings/faiss_index.bin"):
+            index_std = faiss.read_index("embeddings/faiss_index.bin")
+        else:
+            print("Warning: Standard index not found")
+        if os.path.exists("embeddings/faiss_sbir_index.bin"):
+            index_sbir = faiss.read_index("embeddings/faiss_sbir_index.bin")
+        else:
+            print("Warning: SBIR index not found")
+        import gc
+        gc.collect()
+    return index_std, index_sbir
 
 def get_base64_image(image_path):
     try:
@@ -126,7 +149,12 @@ def format_results(ranked_results):
 
 @app.post("/search/text", response_model=List[SearchResponseItem])
 async def search_by_text(request: SearchRequest):
-    if not hybrid_searcher or not engine:
+    engine = get_engine()
+    index_std, _ = get_indices()
+    hybrid_searcher = globals().get('hybrid_searcher')
+    get_reranker() # Ensure reranker is ready for hybrid searcher
+
+    if not hybrid_searcher or not engine or index_std is None:
         raise HTTPException(status_code=503, detail="Resources not initialized")
 
     # --- INTENT DETECTION ---
@@ -176,7 +204,12 @@ async def search_by_text(request: SearchRequest):
 
 @app.post("/search/image", response_model=List[SearchResponseItem])
 async def search_by_image(file: UploadFile = File(...), top_k: int = Form(12)):
-    if not hybrid_searcher or not engine:
+    engine = get_engine()
+    index_std, _ = get_indices()
+    hybrid_searcher = globals().get('hybrid_searcher')
+    get_reranker()
+
+    if not hybrid_searcher or not engine or index_std is None:
         raise HTTPException(status_code=503, detail="Resources not initialized")
         
     contents = await file.read()
@@ -194,7 +227,12 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = Form(12)):
 
 @app.post("/search/sketch", response_model=List[SearchResponseItem])
 async def search_by_sketch(file: UploadFile = File(...), top_k: int = Form(12)):
-    if not hybrid_searcher or not engine:
+    engine = get_engine()
+    _, index_sbir = get_indices()
+    hybrid_searcher = globals().get('hybrid_searcher')
+    get_reranker()
+
+    if not hybrid_searcher or not engine or index_sbir is None:
         raise HTTPException(status_code=503, detail="Resources not initialized")
 
     contents = await file.read()
@@ -212,7 +250,13 @@ async def search_by_sketch(file: UploadFile = File(...), top_k: int = Form(12)):
 
 @app.post("/search/handwriting", response_model=dict)
 async def search_by_handwriting(file: UploadFile = File(...), top_k: int = Form(12), use_llm: bool = Form(True)):
-    if not hybrid_searcher or not engine or not ocr:
+    engine = get_engine()
+    ocr = get_ocr()
+    index_std, _ = get_indices()
+    hybrid_searcher = globals().get('hybrid_searcher')
+    get_reranker()
+
+    if not hybrid_searcher or not engine or not ocr or index_std is None:
         raise HTTPException(status_code=503, detail="Resources not initialized")
 
     contents = await file.read()
@@ -338,7 +382,20 @@ class SimilarSearchRequest(BaseModel):
 
 @app.post("/search/similar", response_model=List[SearchResponseItem])
 async def search_similar(request: SimilarSearchRequest):
-    if not hybrid_searcher or not engine:
+    global vectors
+    engine = get_engine()
+    index_std, _ = get_indices()
+    hybrid_searcher = globals().get('hybrid_searcher')
+    get_reranker()
+
+    # Lazy-load vectors
+    if vectors is None:
+        if os.path.exists("embeddings/image_vectors.npy"):
+            vectors = np.load("embeddings/image_vectors.npy")
+        else:
+             raise HTTPException(status_code=503, detail="Vectors not found")
+
+    if not hybrid_searcher or not engine or index_std is None:
         raise HTTPException(status_code=503, detail="Resources not initialized")
     
     # 1. Get vector for the item
