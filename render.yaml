@@ -3,9 +3,4 @@ services:
     name: jewelux-backend
     runtime: docker
     rootDirectory: backend
-    dockerfilePath: Dockerfile
     plan: free
-    envVars:
-      - key: PORT
-        value: "10000"
-    healthCheckPath: /health
