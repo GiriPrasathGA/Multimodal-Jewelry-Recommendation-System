@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: jewelux-backend
+    runtime: docker
+    plan: starter # Starter plan recommended for AI models
+    envVars:
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health
