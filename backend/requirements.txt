@@ -19,5 +19,3 @@ python-multipart
 openai
 python-dotenv
 sentence-transformers
-
-
