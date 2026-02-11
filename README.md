@@ -80,7 +80,7 @@ npm run dev
 
 ## 🗺️ Project Structure
 
-![Project Architecture](assets/WhatsApp Image 2026-02-09 at 11.42.41 AM.jpeg)
+![Project Architecture](./assets/architecture.jpeg)
 
 ```text
 ├── assets/                   # Documentation assets (Architecture, UI, etc.)
