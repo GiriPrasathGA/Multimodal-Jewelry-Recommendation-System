@@ -80,7 +80,10 @@ npm run dev
 
 ## 🗺️ Project Structure
 
+![Project Architecture](assets/WhatsApp Image 2026-02-09 at 11.42.41 AM.jpeg)
+
 ```text
+├── assets/                   # Documentation assets (Architecture, UI, etc.)
 ├── backend/                  # FastAPI Application Root
 │   ├── data/                 # Raw jewelry image dataset
 │   ├── embeddings/           # Pre-computed FAISS vector indices
