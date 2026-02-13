@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: jewelux-backend
-    runtime: docker
-    rootDirectory: backend
-    plan: free
