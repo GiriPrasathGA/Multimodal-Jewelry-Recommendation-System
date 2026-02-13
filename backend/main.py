@@ -42,69 +42,92 @@ hybrid_searcher = None
 
 @app.on_event("startup")
 def load_resources():
-    global metadata, hybrid_searcher
+    global engine, ocr, reranker, index_std, index_sbir, metadata, vectors, hybrid_searcher
     
-    print("Loading lightweight resources...")
-    # Load Metadata (Small, safe for startup)
+    print("Eagerly loading all resources on startup...")
+    
+    # 1. Load Metadata (CSV)
     if os.path.exists("metadata/items.csv"):
         metadata = pd.read_csv("metadata/items.csv")
-        hybrid_searcher = HybridSearcher(metadata, reranker=None) # Reranker will be attached later
-        print("Metadata and HybridSearcher initialized.")
+        print("✅ Metadata loaded.")
     else:
-        print("Warning: Metadata CSV not found")
+        print("⚠️ Warning: Metadata CSV not found")
+
+    # 2. Load FAISS Indices
+    if os.path.exists("embeddings/faiss_index.bin"):
+        index_std = faiss.read_index("embeddings/faiss_index.bin")
+        print("✅ Standard FAISS index loaded.")
+    else:
+        print("⚠️ Warning: Standard index not found")
+
+    if os.path.exists("embeddings/faiss_sbir_index.bin"):
+        index_sbir = faiss.read_index("embeddings/faiss_sbir_index.bin")
+        print("✅ SBIR FAISS index loaded.")
+    else:
+        print("⚠️ Warning: SBIR index not found")
+
+    # 3. Load Image Vectors (NPY)
+    if os.path.exists("embeddings/image_vectors.npy"):
+        vectors = np.load("embeddings/image_vectors.npy")
+        print("✅ Image vectors loaded.")
+    else:
+        print("⚠️ Warning: image_vectors.npy not found")
+
+    # 4. Load AI Engines/Modules
+    try:
+        print("⏳ Loading CLIP Engine...")
+        engine = CLIPEngine()
+        print("✅ CLIP Engine initialized.")
+    except Exception as e:
+        print(f"❌ Error loading CLIP Engine: {e}")
+
+    try:
+        print("⏳ Loading Reranker...")
+        reranker = Reranker()
+        print("✅ Reranker initialized.")
+    except Exception as e:
+        print(f"❌ Error loading Reranker: {e}")
+
+    try:
+        print("⏳ Loading OCR Manager...")
+        ocr = OCRManager()
+        ocr.load_model()
+        print("✅ OCR Manager initialized.")
+    except Exception as e:
+        print(f"❌ Error loading OCR Manager: {e}")
+
+    # 5. Initialize HybridSearcher
+    if metadata is not None:
+        hybrid_searcher = HybridSearcher(metadata, reranker=reranker)
+        print("✅ HybridSearcher initialized.")
 
     import gc
     gc.collect()
-    print("Startup complete.")
+    print("✨ Startup sequence complete. All resources ready.")
 
 def get_engine():
     global engine
     if engine is None:
-        print("Lazy-loading CLIP Engine...")
-        from utils.embedder import CLIPEngine
-        engine = CLIPEngine()
-        import gc
-        gc.collect()
+        raise HTTPException(status_code=503, detail="CLIP Engine not initialized")
     return engine
 
 def get_reranker():
-    global reranker, hybrid_searcher
+    global reranker
     if reranker is None:
-        print("Lazy-loading Reranker...")
-        from utils.reranker import Reranker
-        try:
-            reranker = Reranker()
-            if hybrid_searcher:
-                hybrid_searcher.reranker = reranker
-            import gc
-            gc.collect()
-        except Exception as e:
-            print(f"Warning: Failed to load Reranker: {e}")
+        # Fallback or warning if reranker is optional, but here we expect it pre-loaded
+        print("Warning: Reranker requested but not pre-loaded")
     return reranker
 
 def get_ocr():
     global ocr
     if ocr is None:
-        print("Lazy-loading OCR Manager...")
-        ocr = OCRManager()
-        ocr.load_model()
-        import gc
-        gc.collect()
+        raise HTTPException(status_code=503, detail="OCR Manager not initialized")
     return ocr
 
 def get_indices():
     global index_std, index_sbir
-    if index_std is None:
-        if os.path.exists("embeddings/faiss_index.bin"):
-            index_std = faiss.read_index("embeddings/faiss_index.bin")
-        else:
-            print("Warning: Standard index not found")
-        if os.path.exists("embeddings/faiss_sbir_index.bin"):
-            index_sbir = faiss.read_index("embeddings/faiss_sbir_index.bin")
-        else:
-            print("Warning: SBIR index not found")
-        import gc
-        gc.collect()
+    if index_std is None and index_sbir is None:
+        raise HTTPException(status_code=503, detail="Search indices not initialized")
     return index_std, index_sbir
 
 def get_base64_image(image_path):
@@ -382,25 +405,12 @@ class SimilarSearchRequest(BaseModel):
 
 @app.post("/search/similar", response_model=List[SearchResponseItem])
 async def search_similar(request: SimilarSearchRequest):
-    global vectors
-    engine = get_engine()
-    index_std, _ = get_indices()
-    hybrid_searcher = globals().get('hybrid_searcher')
-    get_reranker()
-
-    # Lazy-load vectors
-    if vectors is None:
-        if os.path.exists("embeddings/image_vectors.npy"):
-            vectors = np.load("embeddings/image_vectors.npy")
-        else:
-             raise HTTPException(status_code=503, detail="Vectors not found")
-
-    if not hybrid_searcher or not engine or index_std is None:
-        raise HTTPException(status_code=503, detail="Resources not initialized")
-    
     # 1. Get vector for the item
     # vectors is a global numpy array
-    if vectors is None or request.id >= len(vectors):
+    if vectors is None:
+         raise HTTPException(status_code=503, detail="Vectors not pre-loaded")
+    
+    if request.id >= len(vectors):
         raise HTTPException(status_code=404, detail="Item ID not found")
         
     target_vec = vectors[request.id].reshape(1, -1).astype('float32')
@@ -412,11 +422,6 @@ async def search_similar(request: SimilarSearchRequest):
     
     # 3. Use get_hybrid_scores mostly for formatting & potential filtering if we add it later
     # We pass query_text="" so it relies purely on visual similarity for now.
-    # Note: We filter out the item itself in the logic below or via index slicing
-    
-    # Exclude the item itself (usually index 0)
-    # logic: I[0] is the list of indices. D[0] is distances.
-    # We check if request.id is in I[0] and remove it.
     
     found_indices = I[0]
     found_scores = D[0]
