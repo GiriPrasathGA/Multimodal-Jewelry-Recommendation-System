@@ -7,3 +7,6 @@ dist/
 backend/data/
 backend/metadata/
 backend/embeddings/
+files/data/
+files/embedding/
+files/metadata/
