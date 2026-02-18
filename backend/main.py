@@ -132,8 +132,12 @@ def get_indices():
 
 def get_base64_image(image_path):
     try:
+        # Normalize path for Linux/Docker environment (replace Windows backslashes)
+        image_path = image_path.replace("\\", "/")
         with open(image_path, "rb") as f: return base64.b64encode(f.read()).decode()
-    except: return None
+    except Exception as e: 
+        print(f"Error loading image {image_path}: {e}")
+        return None
 
 # --- Pydantic Models ---
 class SearchRequest(BaseModel):
