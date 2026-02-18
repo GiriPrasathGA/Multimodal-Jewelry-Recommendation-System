@@ -8,8 +8,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == "__main__":
     try:
-        print("Starting uvicorn on port 8001...", flush=True)
-        uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=False, log_level="debug")
+        port = int(os.getenv("PORT", 8000))
+        print(f"Starting uvicorn on port {port}...", flush=True)
+        uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False, log_level="info")
     except Exception as e:
         print(f"Failed to start uvicorn: {e}", flush=True)
         import traceback
