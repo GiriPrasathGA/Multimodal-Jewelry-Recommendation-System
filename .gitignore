@@ -6,6 +6,6 @@ dist/
 .DS_Store
 backend/data/
 backend/metadata/
-backend/embeddings/
+
 .vscode/
 
