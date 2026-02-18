@@ -4,16 +4,22 @@ FROM python:3.9
 # Set working directory to /code
 WORKDIR /code
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements from backend
 COPY ./backend/requirements.txt /code/requirements.txt
 
-# Install dependencies (CPU version for speed, though HF has 16GB RAM so generic is fine too)
+# Install dependencies
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 # Copy the backend code into /code
 COPY ./backend /code
 
-# Create directories for writable data (HF Spaces specific permissions)
+# Create directories for writable data (HF Spaces - ensure permissions)
 RUN mkdir -p /code/embeddings /code/metadata /code/data
 RUN chmod -R 777 /code/embeddings /code/metadata /code/data
 
@@ -21,5 +27,4 @@ RUN chmod -R 777 /code/embeddings /code/metadata /code/data
 EXPOSE 7860
 
 # Command to run the app
-# Note: We use 7860 as the port
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
