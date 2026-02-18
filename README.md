@@ -1,3 +1,13 @@
+---
+title: JewelUX Backend
+emoji: 💎
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # 💎 JewelUX: Next-Gen Multimodal Jewelry Search
 
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
