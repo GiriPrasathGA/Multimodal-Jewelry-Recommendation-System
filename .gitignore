@@ -6,4 +6,4 @@ dist/
 .DS_Store
 .vscode/
 
-backend/data/jewellery_Data/
+Jewellery_Data/
