@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 // Define API Base URL (Vercel support + Localhost fallback)
-const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8001`;
+const API_BASE_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`;
 
 function App() {
     const [activeTab, setActiveTab] = useState('home');
