@@ -19,6 +19,9 @@ from utils.ocr import OCRManager
 from utils.hybrid import HybridSearcher
 from utils.reranker import Reranker
 
+# Base directory for absolute paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI(title="JewelUX API")
 
 # Enable CORS for React frontend
@@ -47,31 +50,35 @@ def load_resources():
     print("Eagerly loading all resources on startup...")
     
     # 1. Load Metadata (CSV)
-    if os.path.exists("metadata/items.csv"):
-        metadata = pd.read_csv("metadata/items.csv")
-        print("✅ Metadata loaded.")
+    metadata_path = os.path.join(BASE_DIR, "metadata/items.csv")
+    if os.path.exists(metadata_path):
+        metadata = pd.read_csv(metadata_path)
+        print(f"✅ Metadata loaded from {metadata_path}")
     else:
-        print("⚠️ Warning: Metadata CSV not found")
+        print(f"⚠️ Warning: Metadata CSV not found at {metadata_path}")
 
     # 2. Load FAISS Indices
-    if os.path.exists("embeddings/faiss_index.bin"):
-        index_std = faiss.read_index("embeddings/faiss_index.bin")
-        print("✅ Standard FAISS index loaded.")
+    std_index_path = os.path.join(BASE_DIR, "embeddings/faiss_index.bin")
+    if os.path.exists(std_index_path):
+        index_std = faiss.read_index(std_index_path)
+        print(f"✅ Standard FAISS index loaded from {std_index_path}")
     else:
-        print("⚠️ Warning: Standard index not found")
+        print(f"⚠️ Warning: Standard index not found at {std_index_path}")
 
-    if os.path.exists("embeddings/faiss_sbir_index.bin"):
-        index_sbir = faiss.read_index("embeddings/faiss_sbir_index.bin")
-        print("✅ SBIR FAISS index loaded.")
+    sbir_index_path = os.path.join(BASE_DIR, "embeddings/faiss_sbir_index.bin")
+    if os.path.exists(sbir_index_path):
+        index_sbir = faiss.read_index(sbir_index_path)
+        print(f"✅ SBIR FAISS index loaded from {sbir_index_path}")
     else:
-        print("⚠️ Warning: SBIR index not found")
+        print(f"⚠️ Warning: SBIR index not found at {sbir_index_path}")
 
     # 3. Load Image Vectors (NPY)
-    if os.path.exists("embeddings/image_vectors.npy"):
-        vectors = np.load("embeddings/image_vectors.npy")
-        print("✅ Image vectors loaded.")
+    vectors_path = os.path.join(BASE_DIR, "embeddings/image_vectors.npy")
+    if os.path.exists(vectors_path):
+        vectors = np.load(vectors_path)
+        print(f"✅ Image vectors loaded from {vectors_path}")
     else:
-        print("⚠️ Warning: image_vectors.npy not found")
+        print(f"⚠️ Warning: image_vectors.npy not found at {vectors_path}")
 
     # 4. Load AI Engines/Modules
     try:
@@ -350,13 +357,14 @@ def get_tags():
 
     # Lazy load if missing
     if metadata is None:
-        print("DEBUG: Metadata missing, attempting reload...")
+        metadata_path = os.path.join(BASE_DIR, "metadata/items.csv")
+        print(f"DEBUG: Metadata missing, attempting reload from {metadata_path}...")
         try:
-            if os.path.exists("metadata/items.csv"):
-                metadata = pd.read_csv("metadata/items.csv")
+            if os.path.exists(metadata_path):
+                metadata = pd.read_csv(metadata_path)
                 print("DEBUG: Metadata reloaded successfully")
             else:
-                print("DEBUG: metadata/items.csv not found")
+                print(f"DEBUG: {metadata_path} not found")
         except Exception as e:
             print(f"DEBUG: Failed to reload metadata: {e}")
 
