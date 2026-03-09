@@ -10,6 +10,9 @@ app_port: 7860
 
 # 💎 JewelUX: Next-Gen Multimodal Jewelry Search
 
+## Capstone_Project_2
+
+
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
