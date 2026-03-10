@@ -1,118 +1,143 @@
 # 💎 JewelUX: Next-Gen Multimodal Jewelry Search
 
-## Capstone_Project_2
-
-
-![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
-![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-
 JewelUX is a premium, AI-driven jewelry recommendation system that redefines how users discover luxury items. By combining state-of-the-art Computer Vision (**CLIP**) with lightning-fast vector search (**FAISS**), JewelUX enables a truly multimodal search experience—find your perfect piece through text, images, hand-drawn sketches, or even handwriting.
+
+---
 
 ## ✨ Key Features
 
 - **🌈 Multimodal Search Engine**: 
-  - **Text-to-Image**: Describe what you want ("Gold necklace with rubies").
-  - **Image Similarity**: Upload a photo to find visually matching jewelry.
-  - **Sketch-to-Item (SBIR)**: Draw a rough sketch and see it come to life.
-  - **Handwriting Search**: Upload a handwritten note or tag to search for specific items.
-- **📈 Real-time Market Ticker**: Live simulated rates for Gold, Silver, and Diamonds directly in the header.
+  - **Text-to-Image**: Search using natural language ("Gold necklace with rubies").
+  - **Image Similarity**: Upload a photo to find visually matching jewelry from the inventory.
+  - **Sketch-to-Item (SBIR)**: Draw a rough sketch in the UI and see it matched to real products.
+  - **Handwriting Search**: Upload a handwritten note; the system extracts the text using OCR and performs a search.
+- **📈 Real-time Market Ticker**: Live simulated rates for Gold, Silver, and Diamonds.
 - **✨ Liquid Gold UI**: A high-end aesthetic featuring glassmorphism, holographic interactions, and custom "Aura Cursor" tracking.
 - **🏷️ Dynamic Smart Tags**: Automatically generated search suggestions based on current inventory metadata.
-- **🔍 Deep Insights**: Interactive product modals with similarity-based recommendations.
+- **🔍 Deep Insights**: Interactive product modals with similarity-based recommendations and technical specifications.
 
-## 🛠️ Technical Stack
+---
+
+## 🧠 How It Works (Search Logic)
+
+JewelUX uses a sophisticated **Multi-Stage Retrieval** pipeline to ensure the most relevant jewelry is found:
+
+1.  **Stage 1: Vector Retrieval (CLIP)** - The system converts text or images into a 512-dimensional vector and performs an approximate nearest neighbor search in FAISS to find the top 100 visual matches.
+2.  **Stage 2: Semantic Filtering (BM25)** - For text queries, a BM25 keyword search is performed over the product descriptions to find exact term matches (e.g., "ruby", "18k").
+3.  **Stage 3: Hybrid Scoring** - Scores from CLIP and BM25 are fused (40% Visual, 60% Textual) to rank candidates that are both visually and descriptively accurate.
+4.  **Stage 4: Neural Reranking** - The top candidates are passed through a **Cross-Encoder** model that analyzes the query-description pair with deep attention, pushing the absolute best matches to the top.
+5.  **Stage 5: Categorical Guardrails** - If the AI detects a specific category (like "ring"), it automatically suppresses or filters out non-matching items to prevent irrelevant noise.
+
+---
+
+## 🛠️ Technical Stack & AI Models
 
 ### **Backend (Python / FastAPI)**
-- **AI Engine**: [OpenAI CLIP](https://github.com/openai/CLIP) for cross-modal embeddings.
-- **Vector Database**: [Meta FAISS](https://github.com/facebookresearch/faiss) for high-performance similarity search.
-- **OCR**: Handwriting recognition module for extracting search intent from images.
-- **Search Logic**: Hybrid retrieval system combining semantic vector scores with BM25-inspired keyword ranking.
+- **Core AI Engine**: [OpenAI CLIP (ViT-B/32)](https://github.com/openai/CLIP) for generating cross-modal embeddings for text, images, and sketches.
+- **Vector Database**: [Meta FAISS](https://github.com/facebookresearch/faiss) for high-performance similarity search across high-dimensional vectors.
+- **Reranker**: [Cross-Encoder (ms-marco-MiniLM-L-6-v2)](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) to refine search results for maximum relevance.
+- **OCR Engine**: [TrOCR (microsoft/trocr-small-handwritten)](https://huggingface.co/microsoft/trocr-small-handwritten) for high-accuracy handwriting recognition.
+- **Query Refinement**: Integrated LLM logic to clean OCR noise and detect search categories automatically.
+- **Hybrid Search**: A multi-stage retrieval system combining semantic vector scores, categorical filtering, and neural reranking.
 
 ### **Frontend (React / Vite)**
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) for a modern, responsive design system.
-- **Animations**: [Framer Motion](https://www.framer.com/motion/) for fluid transitions and interactive components.
-- **Networking**: Axios for seamless API integration with the FastAPI backend.
+- **Styling**: Vanilla CSS + Tailwind CSS for a premium design system.
+- **Animations**: Framer Motion for fluid transitions and micro-interactions.
+- **State Management**: React Hooks (useState/useEffect) for real-time UI updates.
+- **Networking**: Axios with centralized configuration for API communication.
 
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.9+ 
-- Node.js 18+
-- Recommended: NVIDIA GPU with CUDA for faster inference (optional).
+- **Python**: 3.9 or higher
+- **Node.js**: 18.0 or higher
+- **Hardware**: 8GB+ RAM (NVIDIA GPU recommended for TrOCR/CLIP inference)
 
 ### Setup & Installation
 
-1. **Clone the Repository**
+1. **Clone the Project**
    ```bash
    git clone https://github.com/GiriPrasathGA/Multimodal-Jewelry-Recommendation-System.git
    cd Multimodal-Jewelry-Recommendation-System
    ```
 
-2. **Backend Setup**
+2. **Setup Backend**
    ```bash
    cd backend
    python -m venv .venv
-   # Windows:
+   # Windows
    .\.venv\Scripts\Activate.ps1
-   # Linux/macOS:
+   # Linux/macOS
    source .venv/bin/activate
-   
    pip install -r requirements.txt
    ```
 
-3. **Frontend Setup**
+3. **Setup Frontend**
    ```bash
    cd ../frontend
    npm install
    ```
 
+4. **Configure Environment**
+   Create a `.env` file in the `backend/` directory:
+   ```env
+   LLM_API_KEY=your_api_key_here
+   LLM_BASE_URL=https://your_provider_url_here
+   ```
+
 ### Running the Application
 
-You can start both the backend and frontend with a single command from the project root:
+Start both the backend and frontend with a single command from the project root:
 
-**Option 1: Using Python (Recommended)**
+**Option 1: Python (Cross-platform)**
 ```bash
 python run.py
 ```
 
-**Option 2: Using PowerShell (Windows)**
+**Option 2: PowerShell (Windows)**
 ```powershell
 ./run_servers.ps1
 ```
-*Starts the FastAPI backend on `http://localhost:8000` and the React frontend on `http://localhost:5173` simultaneously.*
+
+---
+
+## 🔌 API Endpoints (Documentation)
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/search/text` | `POST` | Semantic search using a text query. |
+| `/search/image` | `POST` | Visual similarity search using an uploaded file. |
+| `/search/sketch` | `POST` | Sketch-to-Image retrieval. |
+| `/search/ocr` | `POST` | Handwritten query extraction and search. |
+| `/search/featured` | `GET` | Retrieve a list of featured/popular items. |
+| `/tags` | `GET` | Get dynamically generated smart search tags. |
+| `/health` | `GET` | Check system status and resource availability. |
+
+---
 
 ## 🗺️ Project Structure
 
-![Project Architecture](./assets/architecture.jpeg)
-
 ```text
-├── assets/                   # Documentation assets (Architecture, UI, etc.)
-├── backend/                  # FastAPI Application Root
-│   ├── data/                 # Raw jewelry image dataset
-│   ├── embeddings/           # Pre-computed FAISS vector indices
-│   ├── metadata/             # item.csv and processed metadata
-│   ├── scripts/              # Data ingestion and indexing scripts
-│   ├── utils/                # AI logic (CLIP, OCR, Hybrid Search)
-│   ├── main.py               # API Endpoints and logic
-│   ├── requirements.txt      # Python dependencies
-│   └── run.py                # Server entry point
+├── backend/                  # FastAPI Application
+│   ├── data/                 # Raw dataset (Images & Excel)
+│   ├── embeddings/           # FAISS indices (.bin) and Vectors (.npy)
+│   ├── metadata/             # Processed CSV data for retrieval
+│   ├── utils/                # AI Modules (Embedder, OCR, Reranker, Hybrid)
+│   ├── main.py               # Core API Logic
+│   └── run.py                # Uvicorn entry point
 │
-├── frontend/                 # React (Vite) Application Root
+├── frontend/                 # React (Vite) Application
 │   ├── src/
-│   │   ├── components/       # UI Modules (AuraCursor, ResultsGrid, etc.)
-│   │   ├── assets/           # Static images and icons
-│   │   ├── App.jsx           # Application state and search logic
-│   │   ├── index.css         # Global styles and Tailwind imports
-│   │   └── main.jsx          # React entry point
-│   ├── index.html            # HTML template
-│   ├── package.json          # Node.js dependencies
-│   └── tailwind.config.js    # Tailwind CSS configuration
+│   │   ├── components/       # Visual components (Aura, Modals, Grid)
+│   │   ├── App.jsx           # Main logic and state
+│   │   └── tailwind.css      # Typography and Design Tokens
+│   └── vite.config.js        # Build configuration
 │
-├── README.md                 # Project documentation
-└── .gitignore                # Git ignore rules
+├── run.py                    # Unified startup script (Multi-threaded)
+└── run_servers.ps1           # Windows-native startup script
 ```
 
 ---
-*Built as a Capstone Project for RAG & Multimodal AI.*
+*Built as a Capstone Project for Multimodal AI and RAG Architecture.*
