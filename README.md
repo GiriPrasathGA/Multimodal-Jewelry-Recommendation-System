@@ -4,7 +4,7 @@ JewelUX is a premium, AI-driven jewelry recommendation system that redefines how
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 - **🌈 Multimodal Search Engine**: 
   - **Text-to-Image**: Search using natural language ("Gold necklace with rubies").
