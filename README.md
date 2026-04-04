@@ -6,19 +6,19 @@ JewelUX is a premium, AI-driven jewelry recommendation system that redefines how
 
 ## Key Features
 
-- ** Multimodal Search Engine**: 
+- Multimodal Search Engine: 
   - **Text-to-Image**: Search using natural language ("Gold necklace with rubies").
   - **Image Similarity**: Upload a photo to find visually matching jewelry from the inventory.
   - **Sketch-to-Item (SBIR)**: Draw a rough sketch in the UI and see it matched to real products.
   - **Handwriting Search**: Upload a handwritten note; the system extracts the text using OCR and performs a search.
-- ** Real-time Market Ticker**: Live simulated rates for Gold, Silver, and Diamonds.
-- ** Liquid Gold UI**: A high-end aesthetic featuring glassmorphism, holographic interactions, and custom "Aura Cursor" tracking.
-- ** Dynamic Smart Tags**: Automatically generated search suggestions based on current inventory metadata.
-- ** Deep Insights**: Interactive product modals with similarity-based recommendations and technical specifications.
+- Real-time Market Ticker: Live simulated rates for Gold, Silver, and Diamonds.
+- Liquid Gold UI: A high-end aesthetic featuring glassmorphism, holographic interactions, and custom "Aura Cursor" tracking.
+- Dynamic Smart Tags: Automatically generated search suggestions based on current inventory metadata.
+- Deep Insights**: Interactive product modals with similarity-based recommendations and technical specifications.
 
 ---
 
-## 🧠 How It Works (Search Logic)
+## How It Works (Search Logic)
 
 JewelUX uses a sophisticated **Multi-Stage Retrieval** pipeline to ensure the most relevant jewelry is found:
 
