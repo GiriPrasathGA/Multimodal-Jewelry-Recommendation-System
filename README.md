@@ -1,4 +1,4 @@
-# 💎 JewelUX: Next-Gen Multimodal Jewelry Search
+# 💎 JewelUX: An AI-Powered Multimodal Jewelry Recommendation and Retrieval System
 
 JewelUX is a premium, AI-driven jewelry recommendation system that redefines how users discover luxury items. By combining state-of-the-art Computer Vision (**CLIP**) with lightning-fast vector search (**FAISS**), JewelUX enables a truly multimodal search experience—find your perfect piece through text, images, hand-drawn sketches, or even handwriting.
 
